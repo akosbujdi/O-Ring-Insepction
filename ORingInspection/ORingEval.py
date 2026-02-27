@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 import time
+from collections import deque
 
 
 # threshold function method
@@ -41,7 +42,43 @@ def closing(img, k=3):
     return erosion(dilation(img, k), k)
 
 
-# main method
+# connected component labelling method
+def connected_components(binary_img):
+    h, w = binary_img.shape
+    labels = np.zeros((h, w), dtype=int)
+    label = 0
+    areas = {}
+
+    for i in range(h):
+        for j in range(w):
+
+            if binary_img[i, j] == 255 and labels[i, j] == 0:
+
+                label += 1
+                area = 0
+                q = deque()
+                q.append((i, j))
+                labels[i, j] = label
+
+                while q:
+                    x, y = q.popleft()
+                    area += 1
+
+                    # 4-connectivity
+                    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        nx, ny = x + dx, y + dy
+
+                        if 0 <= nx < h and 0 <= ny < w:
+                            if binary_img[nx, ny] == 255 and labels[nx, ny] == 0:
+                                labels[nx, ny] = label
+                                q.append((nx, ny))
+
+                areas[label] = area
+
+    return labels, areas
+
+
+# main section
 for i in range(1, 16):
     # get time at beginning
     start_time = time.time()
@@ -61,13 +98,28 @@ for i in range(1, 16):
     # apply binary morphology
     ring = 255 - bw
     ring_closed = closing(ring, k=3)
-    bw_clean = 255 - ring_closed
+
+    # apply connected component labelling
+    labels, areas = connected_components(ring_closed)
+    # print(f"Image {i} -> Components found: {len(areas)}") # return number of components found in the image
+
+    if len(areas) > 0:
+        largest_label = max(areas, key=areas.get)
+
+        # Create image containing only largest component
+        ring_only = np.zeros_like(ring_closed)
+        ring_only[labels == largest_label] = 255
+    else:
+        ring_only = ring_closed.copy()
+
+    # Convert back to black ring / white background
+    bw_final = 255 - ring_only
 
     # time at end
     processing_time = time.time() - start_time
 
     # add text
-    rgb = cv.cvtColor(bw_clean, cv.COLOR_GRAY2RGB)
+    rgb = cv.cvtColor(bw_final, cv.COLOR_GRAY2RGB)
     cv.putText(rgb, f"Image{i}", (12, 27), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
     cv.putText(rgb, f"Time: {processing_time:.4f}s", (12, 50), cv.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
 
