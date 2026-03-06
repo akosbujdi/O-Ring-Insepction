@@ -13,6 +13,7 @@ def threshold(img, t):
 
 # binary morphology methods - shrinks white gaps (illumination) in o-ring
 # k (optional param): k*k neighbourhood window is examined
+# dilation: expands whtie regions
 def dilation(img, k=3):
     pad = k // 2
     padded = np.pad(img, pad)
@@ -25,7 +26,7 @@ def dilation(img, k=3):
 
     return result
 
-
+# erosion: expands black regions
 def erosion(img, k=3):
     pad = k // 2
     padded = np.pad(img, pad)
@@ -84,7 +85,7 @@ def connected_components(binary_img):
     return labels, areas
 
 
-def classify_ring(ring_only, raw_ring, img_index):
+def classify_ring(ring_only, raw_ring):
     # get centroid
     coords = np.argwhere(ring_only == 255)
     if len(coords) == 0:
@@ -99,9 +100,9 @@ def classify_ring(ring_only, raw_ring, img_index):
         return "FAIL", (0, 0, 255)
 
     # calculate angle and distance of every ring pixel from centroid
-    raw_angles = np.degrees(np.arctan2(raw_coords[:, 0] - cy, raw_coords[:, 1] - cx))
-    raw_angles_int = np.round(raw_angles).astype(int)  # bucketed to nearest degree
-    distances = np.sqrt((raw_coords[:, 0] - cy) ** 2 + (raw_coords[:, 1] - cx) ** 2)
+    raw_angles = np.degrees(np.arctan2(raw_coords[:, 0] - cy, raw_coords[:, 1] - cx)) # angle from centroid
+    raw_angles_int = np.round(raw_angles).astype(int) # angles rounded to nearest int
+    distances = np.sqrt((raw_coords[:, 0] - cy) ** 2 + (raw_coords[:, 1] - cx) ** 2) # distance from centroid
 
     # group pixels by direction: for each angle keep furthest pixel
     outer_radius = {}
@@ -109,7 +110,7 @@ def classify_ring(ring_only, raw_ring, img_index):
         if a not in outer_radius or d > outer_radius[a]:
             outer_radius[a] = d
 
-    # compare the minimum outer radius to the mean across all angles
+    # compare the minimum outer radius (biggest dip) to the mean across all angles
     outer_radii = np.array(list(outer_radius.values()))
     outer_dip = np.min(outer_radii) / np.mean(outer_radii)
     # print(f"Image {img_index} -> Outer dip ratio: {outer_dip:.4f}") # debugging
@@ -158,7 +159,7 @@ for i in range(1, 16):
         ring_only = ring_closed.copy()
 
     # --- apply classification (PASS/FAIL) ---
-    label_text, label_colour, dip_score = classify_ring(ring_only, ring, i)
+    label_text, label_colour, dip_score = classify_ring(ring_only, ring)
 
     # Convert back to black ring / white background
     bw_final = 255 - ring_only
