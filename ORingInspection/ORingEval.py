@@ -11,7 +11,8 @@ def threshold(img, t):
     return bw
 
 
-# binary morphology methods
+# binary morphology methods - shrinks white gaps (illumination) in o-ring
+# k (optional param): k*k neighbourhood window is examined
 def dilation(img, k=3):
     pad = k // 2
     padded = np.pad(img, pad)
@@ -49,6 +50,7 @@ def connected_components(binary_img):
     label = 0
     areas = {}
 
+    # scan pixels
     for i in range(h):
         for j in range(w):
 
@@ -56,23 +58,27 @@ def connected_components(binary_img):
 
                 label += 1
                 area = 0
+                # BFS search
                 q = deque()
                 q.append((i, j))
                 labels[i, j] = label
 
+                # process connected pixel (component)
                 while q:
                     x, y = q.popleft()
                     area += 1
 
-                    # 4-connectivity
+                    # 4-connectivity (vertically and horizontally)
                     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                         nx, ny = x + dx, y + dy
 
                         if 0 <= nx < h and 0 <= ny < w:
+                            # add connected neighbours
                             if binary_img[nx, ny] == 255 and labels[nx, ny] == 0:
                                 labels[nx, ny] = label
                                 q.append((nx, ny))
 
+                # save component area
                 areas[label] = area
 
     return labels, areas
@@ -84,6 +90,7 @@ def classify_ring(ring_only, raw_ring, img_index):
     if len(coords) == 0:
         return "FAIL", (0, 0, 255)
 
+    # estimate center of ring (centroid)
     cy = int(np.mean(coords[:, 0]))
     cx = int(np.mean(coords[:, 1]))
 
@@ -96,7 +103,7 @@ def classify_ring(ring_only, raw_ring, img_index):
     raw_angles_int = np.round(raw_angles).astype(int)  # bucketed to nearest degree
     distances = np.sqrt((raw_coords[:, 0] - cy) ** 2 + (raw_coords[:, 1] - cx) ** 2)
 
-    # build outer edge profile: for each angle keep only the furthest pixel
+    # group pixels by direction: for each angle keep furthest pixel
     outer_radius = {}
     for a, d in zip(raw_angles_int, distances):
         if a not in outer_radius or d > outer_radius[a]:
@@ -164,7 +171,7 @@ for i in range(1, 16):
     h, w = rgb.shape[:2]
 
     # top left - image index
-    cv.putText(rgb, f"Image {i}:", (5, 20), cv.FONT_HERSHEY_SIMPLEX, 0.65, (255, 150, 0), 2)
+    cv.putText(rgb, f"Image {i}:", (3, 20), cv.FONT_HERSHEY_SIMPLEX, 0.65, (255, 150, 0), 2)
 
     # bottom right - score/time
     time_size, _ = cv.getTextSize(f"Time: {processing_time:.4f}s", cv.FONT_HERSHEY_SIMPLEX, 0.52, 2)
